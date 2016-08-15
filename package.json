@@ -1,0 +1,22 @@
+{
+  "name": "react-native-spotify",
+  "version": "1.0.0",
+  "description": "A native module that allows you to use the Spotify SDK API (IOS) with JavaScript through react-native.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viestat/react-native-spotify.git#package"
+  },
+  "keywords": [
+    "Spotify", "react-native", "react native", "native", "react-native-spotify", "SDK"
+  ],
+  "author": "Andres Viesca <andres.viescar@gmail.com> (https://github.com/viestat)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/viestat/react-native-spotify/issues"
+  },
+  "homepage": "https://github.com/viestat/react-native-spotify#readme"
+}
