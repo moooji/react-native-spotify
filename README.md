@@ -164,19 +164,6 @@ Example:
 
 `SpotifyAuth.loggedIn((res)=>{console.log(res);});`
 
-**[isPlaying](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/isPlaying)**
-
-Returns true if the receiver is playing audio, otherwise false
-
-
-| Parameter |description|
-| ------ |:-------------------------------|
-|Callback|`(Function)`a callback to handle the response|
-
-Example:
-
-`SpotifyAuth.isPlaying((res)=>{console.log(res);});`
-
 **[volume](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/volume)**
 
 Returns the volume
@@ -190,22 +177,9 @@ Example:
 
 `SpotifyAuth.volume((res)=>{console.log(res);});`
 
-**[shuffle](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/shuffle)**
 
-Returns true if the receiver expects shuffled playback, otherwise false
-
-
-| Parameter |description|
-| ------ |:-------------------------------|
-|Callback|`(Function)`a callback to handle the response|
-
-Example:
-
-`SpotifyAuth.isShuffling((res)=>{console.log(res);});`
-
-**[repeat](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/repeat)**
-
-Returns true if the receiver expects repeated playback, otherwise false
+### playbackState
+Returns the playback state of the current track
 
 
 | Parameter |description|
@@ -214,22 +188,11 @@ Returns true if the receiver expects repeated playback, otherwise false
 
 Example:
 
-`SpotifyAuth.isRepeating((res)=>{console.log(res);});`
-
-Returns the current approximate playback position of the current track
+`SpotifyAuth.playbackState((res)=>{console.log(res);});`
 
 
-| Parameter |description|
-| ------ |:-------------------------------|
-|Callback|`(Function)`a callback to handle the response|
-
-Example:
-
-`SpotifyAuth.position((res)=>{console.log(res);});`
-
-
-#### currentTrack(callback)
-Returns the metadata of the current track
+### metadata(callback)
+Returns the metadata of the previous, current and next track
 
 | Parameter |description|
 | ------ |:-------------------------------|
@@ -237,7 +200,7 @@ Returns the metadata of the current track
 
 Example:
 
-`SpotifyAuth.currentTrack((res)=>{console.log(res);});`
+`SpotifyAuth.metadata((res)=>{console.log(res);});`
 
 
 Returns the current streaming bitrate the receiver is using
