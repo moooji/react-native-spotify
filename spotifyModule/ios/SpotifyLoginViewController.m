@@ -35,8 +35,6 @@
     // Load the login URL into the WKWebView
     [_webView loadRequest:[NSURLRequest requestWithURL:_login]];
     self.view = _webView;
-
-  
 }
 
 - (void)didReceiveMemoryWarning {
@@ -59,9 +57,12 @@
 - (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
       SpotifyAuth *sharedManager = [SpotifyAuth sharedManager];
       NSURL *url = navigationAction.request.URL;
+      NSURL *redirectUrl = [sharedManager redirectURL];
+
       //Set myScheme to your own Url Scheme
-  NSString *myScheme = [[sharedManager myScheme] stringByReplacingOccurrencesOfString:@"://callback" withString:@""];
-      if ([url.scheme isEqualToString:myScheme]) {
+      NSString *scheme = [redirectUrl.absoluteString stringByReplacingOccurrencesOfString:@"://callback" withString:@""];
+
+      if ([url.scheme isEqualToString:scheme]) {
         [self hideTheThing];
         [sharedManager urlCallback:url];
         decisionHandler(WKNavigationActionPolicyCancel);
@@ -69,16 +70,5 @@
       }
       decisionHandler(WKNavigationActionPolicyAllow);
     }
-
-
-/*
-#pragma mark - Navigation
-
-// In a storyboard-based application, you will often want to do a little preparation before navigation
-- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
-    // Get the new view controller using [segue destinationViewController].
-    // Pass the selected object to the new view controller.
-}
-*/
 
 @end

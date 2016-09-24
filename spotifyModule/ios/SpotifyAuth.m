@@ -24,39 +24,161 @@
 
 RCT_EXPORT_MODULE()
 
-//Start Auth process
+//Start session
 RCT_EXPORT_METHOD(login:(NSDictionary *) options
-                  callback:(RCTResponseSenderBlock)block)
+                  callback:(RCTResponseSenderBlock)callback)
 {
   NSString *clientID = options[@"clientID"];
-  NSString *redirectURL = options[@"redirectURL"];
   NSArray *requestedScopes = options[@"requestedScopes"];
+  NSURL *redirectURL = [NSURL URLWithString:options[@"redirectURL"]];
   NSURL *tokenSwapURL = [NSURL URLWithString:options[@"tokenSwapURL"]];
   NSURL *tokenRefreshURL = [NSURL URLWithString:options[@"tokenRefreshURL"]];
   
   SpotifyAuth *sharedManager = [SpotifyAuth sharedManager];
-  NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+
   //set the sharedManager properties
   [sharedManager setClientID:clientID];
   [sharedManager setRequestedScopes:requestedScopes];
-  [sharedManager setMyScheme:redirectURL];
+  [sharedManager setRedirectURL:redirectURL];
   [sharedManager setTokenSwapURL:tokenSwapURL];
   [sharedManager setTokenRefreshURL:tokenRefreshURL];
 
-   //Observer for successful login
-   [center addObserverForName:@"loginRes" object:nil queue:nil usingBlock:^(NSNotification *notification)
-   {
-     //if there is an error key in the userInfo dictionary send the error, otherwise null
-     if(notification.userInfo[@"error"] != nil){
-       block(@[notification.userInfo[@"error"]]);
-     } else {
-       block(@[[NSNull null]]);
-     }
-     
-   }];
-
-  [self startAuth:clientID setRedirectURL:redirectURL setRequestedScopes:requestedScopes setTokenSwapURL:tokenSwapURL setTokenRefreshURL:tokenRefreshURL];
+  [self ensureSession];
 }
+
+/////////////////////////////////
+////  AUTH
+/////////////////////////////////
+
+- (BOOL)startAuth {
+  SpotifyAuth *sharedManager = [SpotifyAuth sharedManager];
+  NSMutableArray *scopes = [NSMutableArray array];
+  
+  //Turn scope arry of strings into an array of SPTAuth...Scope objects
+  for (int i = 0; i < [sharedManager.requestedScopes count]; i++) {
+    if([sharedManager.requestedScopes[i]  isEqual: @"playlist-read-private"]){
+      [scopes addObject: SPTAuthPlaylistReadPrivateScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"playlist-modify-private"]){
+      [scopes addObject: SPTAuthPlaylistModifyPrivateScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"playlist-modify-public"]){
+      [scopes addObject: SPTAuthPlaylistModifyPublicScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-follow-modify"]){
+      [scopes addObject: SPTAuthUserFollowModifyScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-follow-read"]){
+      [scopes addObject: SPTAuthUserFollowReadScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-library-read"]){
+      [scopes addObject: SPTAuthUserLibraryReadScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-library-modify"]){
+      [scopes addObject: SPTAuthUserLibraryModifyScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-read-private"]){
+      [scopes addObject: SPTAuthUserReadPrivateScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-read-birthdate"]){
+      [scopes addObject: SPTAuthUserReadBirthDateScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"user-read-email"]){
+      [scopes addObject: SPTAuthUserReadEmailScope];
+    } else if([sharedManager.requestedScopes[i]  isEqual: @"streaming"]){
+      [scopes addObject: SPTAuthStreamingScope];
+    }
+  }
+    
+  [[SPTAuth defaultInstance] setClientID:sharedManager.clientID];
+  [[SPTAuth defaultInstance] setTokenSwapURL:sharedManager.tokenSwapURL];
+  [[SPTAuth defaultInstance] setTokenRefreshURL:sharedManager.tokenRefreshURL];
+  [[SPTAuth defaultInstance] setRedirectURL:sharedManager.redirectURL];
+  [[SPTAuth defaultInstance] setRequestedScopes:scopes];
+  //[[SPTAuth defaultInstance] setAllowNativeLogin:false];
+  
+  // Construct a login URL
+  NSURL *loginURL = [[SPTAuth defaultInstance] loginURL];
+  AppDelegate *delegate = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+  
+  // init the webView with the loginURL
+  SpotifyLoginViewController *loginWebView =[[SpotifyLoginViewController alloc] initWithURL:loginURL];
+  UINavigationController *controller = [[UINavigationController alloc] initWithRootViewController: loginWebView];
+  
+  //Present the webView over the rootView
+  [delegate.window.rootViewController presentViewController: controller animated:YES completion:nil];
+  
+  return YES;
+}
+
+-(void)urlCallback: (NSURL *)url {
+  NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+  NSMutableDictionary *loginRes =  [NSMutableDictionary dictionary];
+  
+  if ([[SPTAuth defaultInstance] canHandleURL:url]) {
+    [[SPTAuth defaultInstance] handleAuthCallbackWithTriggeredAuthURL:url callback:^(NSError *error, SPTSession *session) {
+      
+      if (error != nil) {
+        NSLog(@"*** Auth error: %@", error);
+        loginRes[@"error"] = @"error while attempting to login!";
+        
+      } else {
+        
+        // Create a new player if needed
+        if (self.player == nil) {
+          //Set the session property to the seesion we got from the login Url
+          _session = session;
+          [self setSession: session];
+          SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
+          [sharedIn startWithClientId:[SPTAuth defaultInstance].clientID error:nil];
+          self.player = sharedIn;
+          //keep this one
+          [[SpotifyAuth sharedManager] setSession:session];
+          
+        }
+        
+        [self.player loginWithAccessToken:_session.accessToken];
+      }
+      
+    }];
+  } else {
+    loginRes[@"error"] = @"error while attempting to login!";
+  }
+  [center postNotificationName:@"loginRes" object:nil userInfo:loginRes];
+  [center removeObserver:self name:@"loginRes" object:nil];
+  
+}
+
+//Check if session is valid and renew it if not
+-(void)ensureSession {
+  NSLog(@"ENSURING SESSION");
+  SpotifyAuth *sharedManager = [SpotifyAuth sharedManager];
+  
+  if (![[sharedManager session] isValid]){
+    NSLog(@"SESSION IS NOT VALID");
+
+    [[SPTAuth defaultInstance] renewSession:[sharedManager session] callback:^(NSError *error, SPTSession *session) {
+      if(error != nil){
+        NSLog(@"Error: %@", error);
+        [sharedManager startAuth];
+      } else if ([session isValid]) {
+        NSLog(@"RENEWED SESSION");
+        [sharedManager setSession:session];
+        [[sharedManager player] loginWithAccessToken:session.accessToken];
+      } else {
+        NSLog(@"NO RENEWED SESSION");
+        [sharedManager startAuth];
+      }
+    }];
+  } else {
+    NSLog(@"SESSION IS VALID");
+  }
+}
+
+//Returns the session's access token
+RCT_EXPORT_METHOD(getAccessToken:(RCTResponseSenderBlock)callback)
+{
+  SpotifyAuth *sharedManager = [SpotifyAuth sharedManager];
+
+  if([[sharedManager session] isValid]){
+    callback(@[[[sharedManager session] accessToken]]);
+  }else{
+    callback(@[[NSNull null]]);
+    [self ensureSession];
+  }
+}
+
 
 /////////////////////////////////
 ////  SPTAudioStreamingController
@@ -67,31 +189,31 @@ RCT_EXPORT_METHOD(login:(NSDictionary *) options
 ///-----------------------------
 
 //Returns true when SPTAudioStreamingController is initialized, otherwise false
-RCT_EXPORT_METHOD(initialized:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(initialized:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn initialized])]);
+  callback(@[@([sharedIn initialized])]);
 }
 
 //Returns true if the receiver is logged into the Spotify service, otherwise false
-RCT_EXPORT_METHOD(loggedIn:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(loggedIn:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn loggedIn])]);
+  callback(@[@([sharedIn loggedIn])]);
 }
 
 //Returns the volume, as a value between 0.0 and 1.0.
-RCT_EXPORT_METHOD(volume:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(volume:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn volume])]);
+  callback(@[@([sharedIn volume])]);
 }
 
 //Returns the current streaming bitrate the receiver is using
-RCT_EXPORT_METHOD(targetBitrate:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(targetBitrate:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn targetBitrate])]);
+  callback(@[@([sharedIn targetBitrate])]);
 }
 
 /////////////////////////////////
@@ -102,60 +224,58 @@ RCT_EXPORT_METHOD(targetBitrate:(RCTResponseSenderBlock)block)
 /// PlaybackState
 ///-----------------------------
 
-//Returns true if the receiver is playing audio, otherwise false
-RCT_EXPORT_METHOD(isPlaying:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(playbackState:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@(sharedIn.playbackState.isPlaying)]);
+  NSDictionary *playbackState = @{
+                                 @"isPlaying" : @(sharedIn.playbackState.isPlaying),
+                                 @"isShuffling" : @(sharedIn.playbackState.isShuffling),
+                                 @"isRepeating" : @(sharedIn.playbackState.isRepeating),
+                                 @"position" : @(sharedIn.playbackState.position),
+                                 };
+  callback(@[playbackState]);
 }
 
-//Returns true if the receiver expects shuffled playback, otherwise false
-RCT_EXPORT_METHOD(isShuffling:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@(sharedIn.playbackState.isShuffling)]);
-}
-
-//Returns true if the receiver expects repeated playback, otherwise false
-RCT_EXPORT_METHOD(isRepeating:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@(sharedIn.playbackState.isRepeating)]);
-}
-
-//Returns the current approximate playback position of the current track
-RCT_EXPORT_METHOD(position:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@(sharedIn.playbackState.position)]);
-}
-
-/////////////////////////////////
-////  SPTAudioStreamingController
-/////////////////////////////////
 
 ///-----------------------------
 /// PlaybackMetadata
 ///-----------------------------
 
-RCT_EXPORT_METHOD(currentTrack:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(metadata:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  NSDictionary *currentTrack = @{
-                              @"name" : sharedIn.metadata.currentTrack.name,
-                              @"uri" : sharedIn.metadata.currentTrack.uri,
-                              @"playbackSourceUri" : sharedIn.metadata.currentTrack.playbackSourceUri,
-                              @"playbackSourceName" : sharedIn.metadata.currentTrack.playbackSourceName,
-                              @"artistName" : sharedIn.metadata.currentTrack.artistName,
-                              @"artistUri" : sharedIn.metadata.currentTrack.artistUri,
-                              @"artistName" : sharedIn.metadata.currentTrack.artistName,
-                              @"albumName" : sharedIn.metadata.currentTrack.albumName,
-                              @"albumUri" : sharedIn.metadata.currentTrack.albumUri,
-                              @"albumCoverArtUri" : sharedIn.metadata.currentTrack.albumCoverArtUri,
-                              @"duration" : [NSNumber numberWithDouble:sharedIn.metadata.currentTrack.duration],
-                              @"indexInContext" : [NSNumber numberWithInteger:sharedIn.metadata.currentTrack.indexInContext]
-                              };
-  block(@[currentTrack]);
+  NSDictionary *currentTrack = [self getTrackMetadata : sharedIn.metadata.currentTrack];
+  NSDictionary *prevTrack = [self getTrackMetadata : sharedIn.metadata.prevTrack];
+  NSDictionary *nextTrack = [self getTrackMetadata : sharedIn.metadata.nextTrack];
+  
+  NSDictionary *metadata = @{
+                             @"currentTrack" : currentTrack ? currentTrack : [NSNull null],
+                             @"previousTrack" : prevTrack ? prevTrack : [NSNull null],
+                             @"nextTrack" : nextTrack ? nextTrack : [NSNull null],
+                            };
+  callback(@[metadata]);
+}
+
+- (NSDictionary *)getTrackMetadata:(SPTPlaybackTrack *) track {
+  if (track == nil) {
+    return nil;
+  }
+
+  NSDictionary *metadata = @{
+                             @"name" : track.name,
+                             @"uri" : track.uri,
+                             @"playbackSourceUri" : track.playbackSourceUri,
+                             @"playbackSourceName" : track.playbackSourceName,
+                             @"artistName" : track.artistName,
+                             @"artistUri" : track.artistUri,
+                             @"artistName" : track.artistName,
+                             @"albumName" : track.albumName,
+                             @"albumUri" : track.albumUri,
+                             @"albumCoverArtUri" : track.albumCoverArtUri,
+                             @"duration" : [NSNumber numberWithDouble:track.duration],
+                             @"indexInContext" : [NSNumber numberWithInteger:track.indexInContext]
+                             };
+  return metadata;
 }
 
 ///-----------------------------
@@ -170,60 +290,60 @@ RCT_EXPORT_METHOD(logout)
 }
 
 //Set playback volume to the given level. Volume is a value between `0.0` and `1.0`.
-RCT_EXPORT_METHOD(setVolume:(CGFloat)volume callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(setVolume:(CGFloat)volume callback:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn setVolume:volume callback:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
 }
 
 //Set the target streaming bitrate. 0 for low, 1 for normal and 2 for high
-RCT_EXPORT_METHOD(setTargetBitrate:(NSInteger)bitrate callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(setTargetBitrate:(NSInteger)bitrate callback:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn setTargetBitrate:bitrate callback:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
 }
 
 //Seek playback to a given location in the current track (in secconds).
-RCT_EXPORT_METHOD(seekTo:(CGFloat)offset callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(seekTo:(CGFloat)offset callback:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn seekTo:offset callback:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
 }
 
 //Set the "playing" status of the receiver. Pass true to resume playback, or false to pause it.
-RCT_EXPORT_METHOD(setIsPlaying:(BOOL)playing callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(setIsPlaying:(BOOL)playing callback:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn setIsPlaying: playing callback:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
@@ -231,63 +351,63 @@ RCT_EXPORT_METHOD(setIsPlaying:(BOOL)playing callback:(RCTResponseSenderBlock)bl
 
 
 //Play a Spotify URI.
-RCT_EXPORT_METHOD(playSpotifyURI:(NSString *)uri
+RCT_EXPORT_METHOD(play:(NSString *)uri
                   startingWithIndex:(NSUInteger)index
                   startingWithPosition:(NSTimeInterval)position
-                  callback:(RCTResponseSenderBlock)block)
+                  callback:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn playSpotifyURI:uri startingWithIndex:index startingWithPosition:position callback:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
 }
 
 //Queue a Spotify URI.
-RCT_EXPORT_METHOD(queueSpotifyURI:(NSString *)uri callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(queue:(NSString *)uri callback:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn queueSpotifyURI:uri callback:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
 }
 
 //Go to the next track in the queue
-RCT_EXPORT_METHOD(skipNext:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(skipNext:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn skipNext:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
 }
 
 //Go to the previous track in the queue
-RCT_EXPORT_METHOD(skipPrevious:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(skipPrevious:(RCTResponseSenderBlock)callback)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   [sharedIn skipPrevious:^(NSError *error) {
     if(error == nil){
-      block(@[[NSNull null]]);
+      callback(@[[NSNull null]]);
     }else{
-      block(@[error]);
-      [self checkSession];
+      callback(@[error]);
+      [self ensureSession];
     }
     return;
   }];
@@ -302,22 +422,12 @@ RCT_EXPORT_METHOD(skipPrevious:(RCTResponseSenderBlock)block)
 ////  Search
 /////////////////////////////////
 
-///-----------------------------
-/// Properties
-///-----------------------------
-
-///-----------------------------
-/// Methods
-///-----------------------------
-
 //Performs a search with a given query, offset and market filtering, returns an Array filled with json Objects
-/*
- */
 RCT_EXPORT_METHOD(performSearchWithQuery:(NSString *)searchQuery
                   queryType:(NSString *)searchQueryType
                   offset:(NSInteger)offset
                   market:(NSString *)market
-                  callback:(RCTResponseSenderBlock)block)
+                  callback:(RCTResponseSenderBlock)callback)
 {
   SPTSearchQueryType parm;
   //set the SPTSearchQueryType depending on searchQueryType
@@ -341,7 +451,7 @@ RCT_EXPORT_METHOD(performSearchWithQuery:(NSString *)searchQuery
       [resArr addObject:[temp decodedJSONObject]];
     }
     NSLog(@"ret %@ ret", [object nextPageURL]);
-    block(@[[NSNull null],resArr]);
+    callback(@[[NSNull null],resArr]);
     return;
   }];
   
@@ -352,123 +462,12 @@ RCT_EXPORT_METHOD(performSearchWithQuery:(NSString *)searchQuery
 /////////////////////////////////
 
 
-- (BOOL)startAuth:(NSString *) clientID
-        setRedirectURL:(NSString *) redirectURL
-    setRequestedScopes:(NSArray *) requestedScopes
-       setTokenSwapURL:(NSURL *) tokenSwapURL
-    setTokenRefreshURL:(NSURL *) tokenRefreshURL {
-  NSMutableArray *scopes = [NSMutableArray array];
-  //Turn scope arry of strings into an array of SPTAuth...Scope objects
-  for (int i = 0; i < [requestedScopes count]; i++) {
-    if([requestedScopes[i]  isEqual: @"playlist-read-private"]){
-      [scopes addObject: SPTAuthPlaylistReadPrivateScope];
-    } else if([requestedScopes[i]  isEqual: @"playlist-modify-private"]){
-      [scopes addObject: SPTAuthPlaylistModifyPrivateScope];
-    } else if([requestedScopes[i]  isEqual: @"playlist-modify-public"]){
-      [scopes addObject: SPTAuthPlaylistModifyPublicScope];
-    } else if([requestedScopes[i]  isEqual: @"user-follow-modify"]){
-      [scopes addObject: SPTAuthUserFollowModifyScope];
-    } else if([requestedScopes[i]  isEqual: @"user-follow-read"]){
-      [scopes addObject: SPTAuthUserFollowReadScope];
-    } else if([requestedScopes[i]  isEqual: @"user-library-read"]){
-      [scopes addObject: SPTAuthUserLibraryReadScope];
-    } else if([requestedScopes[i]  isEqual: @"user-library-modify"]){
-      [scopes addObject: SPTAuthUserLibraryModifyScope];
-    } else if([requestedScopes[i]  isEqual: @"user-read-private"]){
-      [scopes addObject: SPTAuthUserReadPrivateScope];
-    } else if([requestedScopes[i]  isEqual: @"user-read-birthdate"]){
-      [scopes addObject: SPTAuthUserReadBirthDateScope];
-    } else if([requestedScopes[i]  isEqual: @"user-read-email"]){
-      [scopes addObject: SPTAuthUserReadEmailScope];
-    } else if([requestedScopes[i]  isEqual: @"streaming"]){
-      [scopes addObject: SPTAuthStreamingScope];
-    }
-  }
-  /*
-   FOUNDATION_EXPORT NSString * const SPTAuthStreamingScope;
-   */
-  [[SPTAuth defaultInstance] setClientID:clientID];
-  [[SPTAuth defaultInstance] setTokenSwapURL:tokenSwapURL];
-  [[SPTAuth defaultInstance] setTokenRefreshURL:tokenRefreshURL];
-  [[SPTAuth defaultInstance] setRedirectURL:[NSURL URLWithString:redirectURL]];
-  [[SPTAuth defaultInstance] setRequestedScopes:scopes];
-
-  // Construct a login URL 
-  NSURL *loginURL = [[SPTAuth defaultInstance] loginURL];
-
-  AppDelegate *delegate = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-  // init the webView with the loginURL
-  SpotifyLoginViewController *webView1 =[[SpotifyLoginViewController alloc] initWithURL:loginURL];
-  UINavigationController *controller = [[UINavigationController alloc] initWithRootViewController: webView1];
-  
-  //Present the webView over the rootView
-  [delegate.window.rootViewController presentViewController: controller animated:YES completion:nil];
-  
-  return YES;
-}
-
--(void)urlCallback: (NSURL *)url {
-  NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
-  NSMutableDictionary *loginRes =  [NSMutableDictionary dictionary];
-  
-  if ([[SPTAuth defaultInstance] canHandleURL:url]) {
-    [[SPTAuth defaultInstance] handleAuthCallbackWithTriggeredAuthURL:url callback:^(NSError *error, SPTSession *session) {
-      
-      if (error != nil) {
-        NSLog(@"*** Auth error: %@", error);
-        loginRes[@"error"] = @"error while attempting to login!";
-        
-      } else {
-      
-      // Create a new player if needed
-      if (self.player == nil) {
-        //Set the session property to the seesion we got from the login Url
-        _session = session;
-        [self setSession: session];
-        SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-        [sharedIn startWithClientId:[SPTAuth defaultInstance].clientID error:nil];
-        self.player = sharedIn;
-        //keep this one
-        [[SpotifyAuth sharedManager] setSession:session];
-
-      }
-      
-        [self.player loginWithAccessToken:_session.accessToken];
-      }
-      
-    }];
-  } else {
-    loginRes[@"error"] = @"error while attempting to login!";
-  }
-  [center postNotificationName:@"loginRes" object:nil userInfo:loginRes];
-  [center removeObserver:self name:@"loginRes" object:nil];
-  
-}
-
-//Check if session is valid and renew it if not
--(void)checkSession{
-  SpotifyAuth *sharedManager = [SpotifyAuth sharedManager];
-  if (![[sharedManager session] isValid]){
-    [[SPTAuth defaultInstance] renewSession:[sharedManager session] callback:^(NSError *error, SPTSession *session) {
-      if(error != nil){
-        NSLog(@"Error: %@", error);
-        //launch the login again
-        [sharedManager startAuth:sharedManager.clientID setRedirectURL:sharedManager.myScheme setRequestedScopes:sharedManager.requestedScopes setTokenSwapURL:sharedManager.tokenSwapURL setTokenRefreshURL:sharedManager.tokenRefreshURL];
-      } else {
-        [sharedManager setSession:session];
-        [[sharedManager player] loginWithAccessToken:session.accessToken];
-      }
-    }];
-  }
-  
-}
-
 -(void)setSession:(SPTSession *)session{
   _session = session;
 }
 
--(void)setMyScheme:(NSString *)myScheme{
-  _myScheme = myScheme;
+-(void)setRedirectURL:(NSURL *)redirectURL{
+  _redirectURL = redirectURL;
 }
 
 -(void)setClientID:(NSString *)clientID{
