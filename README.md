@@ -201,7 +201,7 @@ Returns true if the receiver expects shuffled playback, otherwise false
 
 Example:
 
-`SpotifyAuth.shuffle((res)=>{console.log(res);});`
+`SpotifyAuth.isShuffling((res)=>{console.log(res);});`
 
 **[repeat](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/repeat)**
 
@@ -214,9 +214,7 @@ Returns true if the receiver expects repeated playback, otherwise false
 
 Example:
 
-`SpotifyAuth.repeat((res)=>{console.log(res);});`
-
-**[currentPlaybackPosition](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/currentPlaybackPosition)**
+`SpotifyAuth.isRepeating((res)=>{console.log(res);});`
 
 Returns the current approximate playback position of the current track
 
@@ -227,25 +225,11 @@ Returns the current approximate playback position of the current track
 
 Example:
 
-`SpotifyAuth.currentPlaybackPosition((res)=>{console.log(res);});`
-
-**[currentTrackDuration](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/currentTrackDuration)**
-
-Returns the length of the current track
+`SpotifyAuth.position((res)=>{console.log(res);});`
 
 
-| Parameter |description|
-| ------ |:-------------------------------|
-|Callback|`(Function)`a callback to handle the response|
-
-Example:
-
-`SpotifyAuth.currentTrackDuration((res)=>{console.log(res);});`
-
-**[currentTrackURI](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/currentTrackURI)**
-
-Returns the current track URI, playing or not
-
+#### currentTrack(callback)
+Returns the metadata of the current track
 
 | Parameter |description|
 | ------ |:-------------------------------|
@@ -253,22 +237,8 @@ Returns the current track URI, playing or not
 
 Example:
 
-`SpotifyAuth.currentTrackURI((res)=>{console.log(res);});`
+`SpotifyAuth.currentTrack((res)=>{console.log(res);});`
 
-**[currentTrackIndex](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/currentTrackIndex)**
-
-Returns the currenly playing track index
-
-
-| Parameter |description|
-| ------ |:-------------------------------|
-|Callback|`(Function)`a callback to handle the response|
-
-Example:
-
-`SpotifyAuth.currentTrackIndex((res)=>{console.log(res);});`
-
-**[targetBitrate](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/targetBitrate)**
 
 Returns the current streaming bitrate the receiver is using
 
@@ -321,61 +291,35 @@ Example:
 
 `SpotifyAuth.setTargetBitrate(2,(error)=>{console.log(error);});`
 
-**[-seekToOffset:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/seekToOffset:callback:)**
+**[-seekTo:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/seekTo:callback:)**
 
 Seek playback to a given location in the current track (in secconds).
 
 | Parameter |description|
 | ------ |:-------------------------------|
-| offset |`(Number)`The time to seek to|
+| offset |`(Number)`The time in seconds to seek to|
 |Callback|`(Function)`a callback that will pass back an `NSError` object if an error ocurred|
 
 Example:
 
-`SpotifyAuth.seekToOffset(110,(error)=>{console.log(error);});`
+`SpotifyAuth.seekTo(110,(error)=>{console.log(error);});`
 
-**[-playURIs:withOptions:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/playURIs:withOptions:callback:)**
-
-Play a list of Spotify URIs.(at most 100 tracks).`SPTPlayOptions` containing extra information about the play request such as which track to play and from which starting position within the track.
-
-| Parameter |description|
-| ------ |:-------------------------------|
-| uris |`(Array)`The array of URI’s to play (at most 100 tracks)|
-| options |`(Object)` with trackIndex:`(Number)` and/or startTime:`(Number)` (can be null)|
-|Callback|`(Function)`a callback that will pass back an `NSError` object if an error ocurred|
-
-Example:
-
-`SpotifyAuth.playURIs(["spotify:track:6HxIUB3fLRS8W3LfYPE8tP",...], {trackIndex :0, startTime:12.0},(error)=>{console.log(error)});`
-
-**[-replaceURIs:withCurrentTrack:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/replaceURIs:withCurrentTrack:callback:)**
- 
- Replace the current list of tracks without stopping playback.
-
-| Parameter |description|
-| ------ |:-------------------------------|
-| uris |`(Array)`The array of URI’s to play|
-| index |`(Number)`The current track in the list|
-|Callback|`(Function)`a callback that will pass back an `NSError` object if an error ocurred|
-
-Example:
-
-`SpotifyAuth.replaceURIs(["spotify:track:6HxIUB3fLRS8W3LfYPE8tP",...], 0, (error)=>{console.log(error)});`
-
-**[-playURI:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/playURI:callback:)**
+**[-playSpotifyURI:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/playSpotifyURI:callback:)**
 
 Play a Spotify URI.
 
 | Parameter |description|
 | ------ |:-------------------------------|
-| uri |`(Number)`The URI to play|
+| uri |`(String)`The URI to play|
+| index |`(Number)`The index to play|
+| offset |`(Number)`The time in seconds to start playing|
 |Callback|`(Function)`a callback that will pass back an `NSError` object if an error ocurred|
 
 Example:
 
 `SpotifyAuth.playURI("spotify:track:6HxIUB3fLRS8W3LfYPE8tP",(error)=>{console.log(error);});`
 
-**[-queueURI:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/queueURI:callback:)**
+**[-queueSpotifyURI:callback:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/queueSpotifyURI:callback:)**
 
 Queue a Spotify URI.
 
@@ -401,17 +345,6 @@ Example:
 
 `SpotifyAuth.setIsPlaying(true,(error)=>{console.log(error);});`
 
-**[-stop:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/stop:)**
-
-Stop playback and clear the queue and list of tracks.
-
-| Parameter |description|
-| ------ |:-------------------------------|
-|Callback|`(Function)`a callback that will pass back an `NSError` object if an error ocurred|
-
-Example:
-
-`SpotifyAuth.stop((error)=>{console.log(error);});`
 
 **[-skipNext:](https://developer.spotify.com/ios-sdk-docs/Documents/Classes/SPTAudioStreamingController.html#//api/name/skipNext:)**
 

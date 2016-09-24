@@ -80,13 +80,6 @@ RCT_EXPORT_METHOD(loggedIn:(RCTResponseSenderBlock)block)
   block(@[@([sharedIn loggedIn])]);
 }
 
-//Returns true if the receiver is playing audio, otherwise false
-RCT_EXPORT_METHOD(isPlaying:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn isPlaying])]);
-}
-
 //Returns the volume, as a value between 0.0 and 1.0.
 RCT_EXPORT_METHOD(volume:(RCTResponseSenderBlock)block)
 {
@@ -94,53 +87,75 @@ RCT_EXPORT_METHOD(volume:(RCTResponseSenderBlock)block)
   block(@[@([sharedIn volume])]);
 }
 
-//Returns true if the receiver expects shuffled playback, otherwise false
-RCT_EXPORT_METHOD(shuffle:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn shuffle])]);
-}
-
-//Returns true if the receiver expects repeated playback, otherwise false
-RCT_EXPORT_METHOD(repeat:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn repeat])]);
-}
-
-//Returns the current approximate playback position of the current track
-RCT_EXPORT_METHOD(currentPlaybackPosition:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn currentPlaybackPosition])]);
-}
-
-//Returns the length of the current track
-RCT_EXPORT_METHOD(currentTrackDuration:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn currentTrackDuration])]);
-}
-
-//Returns the current track URI, playing or not
-RCT_EXPORT_METHOD(currentTrackURI:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[[[sharedIn currentTrackURI] absoluteString]]);
-}
-
-//Returns the currenly playing track index
-RCT_EXPORT_METHOD(currentTrackIndex:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  block(@[@([sharedIn currentTrackIndex])]);
-}
-
 //Returns the current streaming bitrate the receiver is using
 RCT_EXPORT_METHOD(targetBitrate:(RCTResponseSenderBlock)block)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
   block(@[@([sharedIn targetBitrate])]);
+}
+
+/////////////////////////////////
+////  SPTAudioStreamingController
+/////////////////////////////////
+
+///-----------------------------
+/// PlaybackState
+///-----------------------------
+
+//Returns true if the receiver is playing audio, otherwise false
+RCT_EXPORT_METHOD(isPlaying:(RCTResponseSenderBlock)block)
+{
+  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
+  block(@[@(sharedIn.playbackState.isPlaying)]);
+}
+
+//Returns true if the receiver expects shuffled playback, otherwise false
+RCT_EXPORT_METHOD(isShuffling:(RCTResponseSenderBlock)block)
+{
+  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
+  block(@[@(sharedIn.playbackState.isShuffling)]);
+}
+
+//Returns true if the receiver expects repeated playback, otherwise false
+RCT_EXPORT_METHOD(isRepeating:(RCTResponseSenderBlock)block)
+{
+  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
+  block(@[@(sharedIn.playbackState.isRepeating)]);
+}
+
+//Returns the current approximate playback position of the current track
+RCT_EXPORT_METHOD(position:(RCTResponseSenderBlock)block)
+{
+  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
+  block(@[@(sharedIn.playbackState.position)]);
+}
+
+/////////////////////////////////
+////  SPTAudioStreamingController
+/////////////////////////////////
+
+///-----------------------------
+/// PlaybackMetadata
+///-----------------------------
+
+RCT_EXPORT_METHOD(currentTrack:(RCTResponseSenderBlock)block)
+{
+  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
+  NSDictionary *currentTrack = @{
+                              @"name" : sharedIn.metadata.currentTrack.name,
+                              @"uri" : sharedIn.metadata.currentTrack.uri,
+                              @"playbackSourceUri" : sharedIn.metadata.currentTrack.playbackSourceUri,
+                              @"playbackSourceName" : sharedIn.metadata.currentTrack.playbackSourceName,
+                              @"artistName" : sharedIn.metadata.currentTrack.artistName,
+                              @"artistUri" : sharedIn.metadata.currentTrack.artistUri,
+                              @"artistName" : sharedIn.metadata.currentTrack.artistName,
+                              @"albumName" : sharedIn.metadata.currentTrack.albumName,
+                              @"albumUri" : sharedIn.metadata.currentTrack.albumUri,
+                              @"albumCoverArtUri" : sharedIn.metadata.currentTrack.albumCoverArtUri,
+                              @"duration" : [NSNumber numberWithDouble:sharedIn.metadata.currentTrack.duration],
+                              @"indexInContext" : [NSNumber numberWithInteger:sharedIn.metadata.currentTrack.indexInContext]
+                              };
+  block(@[currentTrack]);
 }
 
 ///-----------------------------
@@ -185,10 +200,10 @@ RCT_EXPORT_METHOD(setTargetBitrate:(NSInteger)bitrate callback:(RCTResponseSende
 }
 
 //Seek playback to a given location in the current track (in secconds).
-RCT_EXPORT_METHOD(seekToOffset:(CGFloat)offset callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(seekTo:(CGFloat)offset callback:(RCTResponseSenderBlock)block)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  [sharedIn seekToOffset:offset callback:^(NSError *error) {
+  [sharedIn seekTo:offset callback:^(NSError *error) {
     if(error == nil){
       block(@[[NSNull null]]);
     }else{
@@ -214,61 +229,15 @@ RCT_EXPORT_METHOD(setIsPlaying:(BOOL)playing callback:(RCTResponseSenderBlock)bl
   }];
 }
 
-//Play a list of Spotify URIs.(at most 100 tracks).`SPTPlayOptions` containing extra information about the play request such as which track to play and from which starting position within the track.
-RCT_EXPORT_METHOD(playURIs:(NSArray *)uris withOptions:(NSDictionary *)options callback:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  NSMutableArray *urisArr = [NSMutableArray arrayWithArray:uris];
-  SPTPlayOptions *playOptions = [[SPTPlayOptions alloc] init];
-  //set the properties of the SPTPlayOptions 'options'
-  if(options[@"trackIndex"] != nil){
-    [playOptions setTrackIndex:[[options objectForKey:@"trackIndex"]intValue]];
-  }
-  if(options[@"startTime"] != nil){
-    [playOptions setStartTime:[options[@"startTime"] floatValue]];
-  }
-  
-  //Turn all the strings in urisArr to NSURL
-  for (int i = 0; i < [urisArr count]; i++) {
-    urisArr[i] = [NSURL URLWithString:urisArr[i]];
-  }
-  [sharedIn playURIs:urisArr withOptions:playOptions callback:^(NSError *error) {
-    if(error == nil){
-      block(@[[NSNull null]]);
-    }else{
-      block(@[error]);
-      [self checkSession];
-    }
-    return;
-  }];
-}
-
-// Replace the current list of tracks without stopping playback.
-RCT_EXPORT_METHOD(replaceURIs:(NSArray *)uris withCurrentTrack:(int)index callback:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  NSMutableArray *urisArr = [NSMutableArray arrayWithArray:uris];
-  //Turn all the strings in urisArr to NSURL
-  for (int i = 0; i < [urisArr count]; i++) {
-    urisArr[i] = [NSURL URLWithString:urisArr[i]];
-  }
-  
-  [sharedIn replaceURIs:urisArr withCurrentTrack:index callback:^(NSError *error) {
-    if(error == nil){
-      block(@[[NSNull null]]);
-    }else{
-      block(@[error]);
-      [self checkSession];
-    }
-    return;
-  }];
-}
 
 //Play a Spotify URI.
-RCT_EXPORT_METHOD(playURI:(NSString *)uri callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(playSpotifyURI:(NSString *)uri
+                  startingWithIndex:(NSUInteger)index
+                  startingWithPosition:(NSTimeInterval)position
+                  callback:(RCTResponseSenderBlock)block)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  [sharedIn playURI:[NSURL URLWithString:uri] callback:^(NSError *error) {
+  [sharedIn playSpotifyURI:uri startingWithIndex:index startingWithPosition:position callback:^(NSError *error) {
     if(error == nil){
       block(@[[NSNull null]]);
     }else{
@@ -280,25 +249,10 @@ RCT_EXPORT_METHOD(playURI:(NSString *)uri callback:(RCTResponseSenderBlock)block
 }
 
 //Queue a Spotify URI.
-RCT_EXPORT_METHOD(queueURI:(NSString *)uri callback:(RCTResponseSenderBlock)block)
+RCT_EXPORT_METHOD(queueSpotifyURI:(NSString *)uri callback:(RCTResponseSenderBlock)block)
 {
   SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  [sharedIn queueURI:[NSURL URLWithString:uri] callback:^(NSError *error) {
-    if(error == nil){
-      block(@[[NSNull null]]);
-    }else{
-      block(@[error]);
-      [self checkSession];
-    }
-    return;
-  }];
-}
-
-//Stop playback and clear the queue and list of tracks.
-RCT_EXPORT_METHOD(stop:(RCTResponseSenderBlock)block)
-{
-  SPTAudioStreamingController *sharedIn = [SPTAudioStreamingController sharedInstance];
-  [sharedIn stop:^(NSError *error) {
+  [sharedIn queueSpotifyURI:uri callback:^(NSError *error) {
     if(error == nil){
       block(@[[NSNull null]]);
     }else{
@@ -480,7 +434,6 @@ RCT_EXPORT_METHOD(performSearchWithQuery:(NSString *)searchQuery
       }
       
         [self.player loginWithAccessToken:_session.accessToken];
-        
       }
       
     }];
