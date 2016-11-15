@@ -2,7 +2,7 @@
 
 
 ##Intro
-A native module that allows you to use the Spotify SDK API (IOS [beta 17](https://github.com/spotify/ios-sdk/releases/tag/beta-17)) with JavaScript through react-native.
+A native module that allows you to use the Spotify SDK API (IOS [beta 23](https://github.com/spotify/ios-sdk/releases/tag/beta-23)) with JavaScript through react-native.
 
 ___
 
@@ -24,7 +24,7 @@ ___
 
 1. Use `npm install react-native-spotify` from the directory of your project in your command line.
 
-2. Download the Spotify IOS SDK beta 17 [here](https://github.com/spotify/ios-sdk/releases/tag/beta-17) and unzip it.
+2. Download the Spotify IOS SDK beta 23 [here](https://github.com/spotify/ios-sdk/releases/tag/beta-23) and unzip it.
 
 3. Open your react native project in Xcode and drag the unzipped `Spotify.framework` file into the `Frameworks` group in your Xcode project (create the group if it doesn’t already exist). In the import dialog, tick the box for **Copy items into destinations group folder** (or **Destination: Copy items if needed**).
 
